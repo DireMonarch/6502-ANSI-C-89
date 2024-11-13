@@ -17,8 +17,10 @@
 
 #include <string>
 #include <fstream>
+#include <sstream>
 
 #include "language.h"
+#include "helpers.h"
 
 std::string get_file_contents(const char *filename) {
     std::ifstream in(filename, std::ios::in | std::ios::binary);
@@ -47,12 +49,16 @@ bool is_token_a_keyword(const char *token) {
     return _is_in(LANGUAGE_KEYWORDS, token);
 }
 
-bool is_char_a_non_digit(const char *character) {
-    return _is_in(LANGUAGE_NONDIGIT, character);
+bool is_char_a_non_digit(char character) {
+    char item[2] = " ";
+    item[0] = character;    
+    return _is_in(LANGUAGE_NONDIGIT, item);
 }
 
-bool is_char_a_digit(const char *character) {
-    return _is_in(LANGUAGE_DIGIT, character);
+bool is_char_a_digit(char character) {
+    char item[2] = " ";
+    item[0] = character;    
+    return _is_in(LANGUAGE_DIGIT, item);
 }
 
 bool is_token_an_operator(const char *token) {
@@ -61,4 +67,145 @@ bool is_token_an_operator(const char *token) {
 
 bool is_token_a_punctuator(const char *token) {
     return _is_in(LANGUAGE_PUNCTUATORS, token);
+}
+bool is_char_whitepsace(char character){
+    char item[2] = " ";
+    item[0] = character;
+    return _is_in(LANGUAGE_WHITESPACE, item);
+}
+
+bool _is_hex_digit(char character) {
+    char item[2] = " ";
+    item[0] = character;
+    return _is_in(LANGAUGE_HEX_DIGITS, item);    
+}
+
+bool _is_octal_digit(char character) {
+    char item[2] = " ";
+    item[0] = character;
+    return _is_in(LANGAUGE_OCTAL_DIGITS, item);    
+}
+
+
+bool _is_char_in_source_character_set(char character) {
+    char item[2] = " ";
+    item[0] = character;
+    return _is_in(LANGUAGE_SOURCE_CARACTER_SET, item);    
+}
+
+
+int _is_escape_sequence_at(std::string token, int index) {
+    if (token.length() <= index+1 ) return 0;
+    if (index < 0) return 0;
+    if (token[index] != '\\') return 0;
+    
+    int i;
+
+    switch (token[index+1])
+    {
+    case '\'':
+    case '"':
+    case '?':
+    case '\\':
+    case 'a':
+    case 'g':
+    case 'f':
+    case 'n':
+    case 'r':
+    case 't':
+    case 'v':
+        return 2;
+        break;
+    
+    case 'x':
+        i = 2;
+        while(index+i < token.length() && _is_hex_digit(token[index+i])) {
+            i++;
+        }
+        if (i > 2) return i;
+        break;
+
+    default:
+        i = 1;
+        while(index+i < token.length() && _is_octal_digit(token[index+i])) {
+            i++;
+        }
+        if (i > 1) return i;
+        break;
+    }
+    return 0;
+}
+
+
+bool is_valid_header_name(std::string token) {
+    if (token[0] != '<' ) return false;
+    for (int i = 1; i < token.length(); i++) {
+        if (token[i] == '>' && i != token.length()-1) return false;
+        if (token[i] == '\n') return false;
+        if (token[i] == '\\') {
+            int consumed = _is_escape_sequence_at(token, i);
+            if (consumed > 0) {
+                i += consumed;
+            }
+            else return false;
+        }
+        else if (!_is_char_in_source_character_set(token[i])) {
+            return false;
+        }
+    }
+ 
+    if (token[token.length()-1] != '>') return false;
+    return true;
+}
+
+
+bool is_valid_string_literal(std::string token) {
+    if (token[0] != '"' ) return false;
+    for (int i = 1; i < token.length(); i++) {
+        if (token[i] == '"' && i != token.length()-1) return false;
+        if (token[i] == '\n') return false;
+        if (token[i] == '\\') {
+            int consumed = _is_escape_sequence_at(token, i);
+            if (consumed > 0) {
+                i += consumed;
+            }
+            else return false;
+        }
+        else if (!_is_char_in_source_character_set(token[i])) {
+            return false;
+        }
+    }
+ 
+    if (token[token.length()-1] != '"') return false;
+    return true;
+}
+
+bool is_valid_character_constant(std::string token) {
+    if (token[0] != '\'' ) return false;
+    for (int i = 1; i < token.length(); i++) {
+        if (token[i] == '\'' && i != token.length()-1) return false;
+        if (token[i] == '\n') return false;
+        if (token[i] == '\\') {
+            int consumed = _is_escape_sequence_at(token, i);
+            if (consumed > 0) {
+                i += consumed;
+            }        
+            else return false;
+        }
+        else if (!_is_char_in_source_character_set(token[i])) return false;
+    }
+    if (token[token.length()-1] != '\'') return true;
+    return true;
+}
+
+
+std::string get_next_token(std::string &in_buffer, int &index) {
+    std::stringstream token;
+    /* skip whitespace */
+    while(index < in_buffer.length() && is_char_whitepsace(in_buffer[index])) index++;
+    while(index < in_buffer.length() && !is_char_whitepsace(in_buffer[index])) {
+        token << in_buffer[index];
+        index++;
+    }
+    return token.str();   
 }
