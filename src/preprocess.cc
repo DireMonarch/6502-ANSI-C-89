@@ -37,6 +37,7 @@
 #define TOKENIZATION_DEBUG 0
 
 std::string preproecess_file(char* filename);  /* forward delcaration */
+std::filesystem::path current_path_; /* Global variable for current directory */
 
 void replace_digraphs(std::string &in_buffer) {
     for (int i = 1; i < in_buffer.length() - 1; i++) {
@@ -320,9 +321,11 @@ std::string tokenize(std::string &in_buffer) {
 std::string execute_preprocessing_directives(std::string &in_buffer){
     int i_start, i_end;
     std::string line, token;
+    std::stringstream out_buffer;
+
     i_start = 0;
     i_end = in_buffer.find('\n', i_start);
-    while( i_end != in_buffer.npos) {
+    while( i_end != in_buffer.npos) {  // got through, line by line
         /* get line contents into line buffer */
         line = in_buffer.substr(i_start, i_end - i_start);
         // std::cout << "EPD:" << line << std::endl; /* debug */
@@ -347,9 +350,17 @@ std::string execute_preprocessing_directives(std::string &in_buffer){
                 else {
                     /* macro replacement */
                 }
-                std::cout << "filename: " << filename << std::endl;
+                std::filesystem::path file_path = current_path_ / filename;
+                std::cout << "filename: " << file_path << std::endl;
+                out_buffer << preproecess_file((char *)file_path.string().c_str());
             }
             else if(token == "define") {
+
+            }
+            else if(token == "ifndef") {
+
+            }
+            else if(token == "endif") {
 
             }
             else {
@@ -361,12 +372,16 @@ std::string execute_preprocessing_directives(std::string &in_buffer){
                 throw std::invalid_argument(message);                
             }
         }
+        else {
+            /* not a preprocessor directive */
+            out_buffer << line << "\n";
+        }
 
         /* Get next line */
         i_start = i_end + 1;
         i_end = in_buffer.find('\n', i_start);
     }
-    return in_buffer;
+    return out_buffer.str();
 }
 
 void preprocess(std::string &buffer) {
@@ -389,7 +404,6 @@ std::string preproecess_file(char* filename){
     return buffer;
 }
 
-std::filesystem::path current_path_;
 int main(int argc, char* argv[]) {
     char* filename = argv[argc - 1];
     std::cout << "Pre-Processing file " << filename << std::endl;
