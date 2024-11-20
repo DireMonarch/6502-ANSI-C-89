@@ -12,6 +12,7 @@ bool is_token_an_operator(const char *token);
 bool is_token_a_punctuator(const char *token);
 bool is_char_whitepsace(char character);
 
+bool is_valid_identifier(std::string token);
 bool is_valid_header_name(std::string token);
 bool is_valid_string_literal(std::string token);
 bool is_valid_character_constant(std::string token);

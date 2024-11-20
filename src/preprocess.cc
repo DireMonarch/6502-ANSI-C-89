@@ -29,6 +29,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <filesystem>
+#include <map>
 
 #include "language.h"
 #include "helpers.h"
@@ -36,8 +37,12 @@
 #define DEBUG 0
 #define TOKENIZATION_DEBUG 0
 
+
 std::string preproecess_file(char* filename);  /* forward delcaration */
+
+/* Global Variables */
 std::filesystem::path current_path_; /* Global variable for current directory */
+std::map<std::string, std::string> macros;
 
 void replace_digraphs(std::string &in_buffer) {
     for (int i = 1; i < in_buffer.length() - 1; i++) {
@@ -178,7 +183,8 @@ std::string tokenize(std::string &in_buffer) {
             token << "\"";
             start_position = i;
             i++;
-            while(i < in_buffer.length() && (in_buffer[i] != '"' || in_buffer[i-1] == '\\') ) {
+            while(i < in_buffer.length() && (in_buffer[i] != '"' || 
+                                            (in_buffer[i-1] == '\\' && in_buffer[i-2] != '\\')) ) {
                 token << in_buffer[i];
                 i++;
             }
@@ -323,64 +329,124 @@ std::string execute_preprocessing_directives(std::string &in_buffer){
     std::string line, token;
     std::stringstream out_buffer;
 
+    int preprocessing_conditional_depth = 0;
+    bool preprocessing_curent_conditional_false = false;
+
     i_start = 0;
     i_end = in_buffer.find('\n', i_start);
     while( i_end != in_buffer.npos) {  // got through, line by line
         /* get line contents into line buffer */
         line = in_buffer.substr(i_start, i_end - i_start);
-        // std::cout << "EPD:" << line << std::endl; /* debug */
-
         int i = 0;
         token = get_next_token(line, i);
         if(token == "#") {
             token = get_next_token(line, i);
-            // std::cout << "EPD::" << line[i] << std::endl; /* debug */
-            std::cout << "EPD: DIRECTIVE:" << token << std::endl; /* debug */
+            if(token == "endif") {
+                preprocessing_curent_conditional_false = false;
+                preprocessing_conditional_depth--;
+                if(preprocessing_conditional_depth < 0) {
+                    std::string message;
+                    message = "\n";
+                    message.append(line);
+                    message.append("\n");
+                    message.append("Unbalaced Pre-Processor Conditional:  #endif without corresponding conditional statement!");
+                    throw std::invalid_argument(message);                     
+                }
+            }    
+            else if(!preprocessing_curent_conditional_false) { /* if conditional include was flase, skip until #endif */
+                if(token == "include") {
+                    token = get_next_token(line, i);
+                    std::string filename;
+                    if(token[0] == '<'){
+                        /* sandard include */
+                    }
+                    else if(token[0] == '"') {
+                        /* local include */
+                        filename = token.substr(1,token.length()-2);
+                    }
+                    else {
+                        /* macro replacement */
+                    }
+                    std::filesystem::path file_path = current_path_ / filename;
+                    out_buffer << preproecess_file((char *)file_path.string().c_str());
+                }
+                else if(token == "define") {
+                    token = get_next_token(line, i);
+                    if(!is_valid_identifier(token)){
+                        std::string message;
+                        message = "\n";
+                        message.append(line);
+                        message.append("\n");
+                        message.append("Identifier Expected : ");
+                        message.append(token);
+                        throw std::invalid_argument(message); 
+                    }
+                    std::string identifier = token;
+                    token = get_next_token(line, i);
+                    macros[identifier] = token;
+                }
+                else if(token == "undef") {
+                    token = get_next_token(line, i);
+                    if(!is_valid_identifier(token)){
+                        std::string message;
+                        message = "\n";
+                        message.append(line);
+                        message.append("\n");
+                        message.append("Identifier Expected : ");
+                        message.append(token);
+                        throw std::invalid_argument(message); 
+                    }
+                    std::string identifier = token;
+                    macros.erase(identifier);
+                }            
+                else if(token == "ifdef") {
+                    token = get_next_token(line, i);
+                    preprocessing_curent_conditional_false = !macros.count(token);
+                    preprocessing_conditional_depth++; // add one to the current depth
+                }
+                else if(token == "ifndef") {
+                    token = get_next_token(line, i);
+                    preprocessing_curent_conditional_false = macros.count(token);
+                    preprocessing_conditional_depth++;
+                }
 
-            if(token == "include") {
-                token = get_next_token(line, i);
-                std::string filename;
-                if(token[0] == '<'){
-                    /* sandard include */
-                }
-                else if(token[0] == '"') {
-                    /* local include */
-                    filename = token.substr(1,token.length()-2);
-                }
                 else {
-                    /* macro replacement */
+                    std::string message;
+                    message = "Invalid preprocessing directive ";
+                    message.append(token);
+                    message.append("\n");
+                    message.append(line);
+                    throw std::invalid_argument(message);                
                 }
-                std::filesystem::path file_path = current_path_ / filename;
-                std::cout << "filename: " << file_path << std::endl;
-                out_buffer << preproecess_file((char *)file_path.string().c_str());
-            }
-            else if(token == "define") {
-
-            }
-            else if(token == "ifndef") {
-
-            }
-            else if(token == "endif") {
-
-            }
-            else {
-                std::string message;
-                message = "Invalid preprocessing directive ";
-                message.append(token);
-                message.append("\n");
-                message.append(line);
-                throw std::invalid_argument(message);                
             }
         }
-        else {
+        else if(!preprocessing_curent_conditional_false)  { /* if conditional include was flase, skip until #endif */
             /* not a preprocessor directive */
-            out_buffer << line << "\n";
+
+            while(token.length() > 0) {
+                if(macros.count(token) > 0) {
+                    out_buffer << macros[token] << " ";
+                }
+                else {
+                    out_buffer << token << " ";
+                }
+                token = get_next_token(line, i);
+            }
+            out_buffer << "\n";
         }
 
         /* Get next line */
         i_start = i_end + 1;
         i_end = in_buffer.find('\n', i_start);
     }
+    if(preprocessing_conditional_depth != 0) {
+        std::string message;
+        message = "\n";
+        message.append(line);
+        message.append("\n");
+        message.append("Unbalaced Pre-Processor Conditional:  Missing #endif!");
+        throw std::invalid_argument(message);                     
+    }    
     return out_buffer.str();
 }
 
@@ -406,7 +472,6 @@ std::string preproecess_file(char* filename){
 
 int main(int argc, char* argv[]) {
     char* filename = argv[argc - 1];
-    std::cout << "Pre-Processing file " << filename << std::endl;
 
     current_path_ = std::filesystem::path(filename);
     current_path_.remove_filename();

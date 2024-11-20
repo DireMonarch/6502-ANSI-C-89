@@ -18,6 +18,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 #include "language.h"
 #include "helpers.h"
@@ -137,6 +138,16 @@ int _is_escape_sequence_at(std::string token, int index) {
 }
 
 
+bool is_valid_identifier(std::string token) {
+    if(token.length() < 1) return false;
+    if(is_token_a_keyword(token.c_str())) return false;
+    if(!is_char_a_non_digit(token[0])) return false;
+    for(int i = 1; i < token.length(); i++){
+        if(!(is_char_a_non_digit(token[i]) || is_char_a_digit(token[i]))) return false;
+    }
+    return true;
+}
+
 bool is_valid_header_name(std::string token) {
     if (token[0] != '<' ) return false;
     for (int i = 1; i < token.length(); i++) {
@@ -203,6 +214,27 @@ std::string get_next_token(std::string &in_buffer, int &index) {
     std::stringstream token;
     /* skip whitespace */
     while(index < in_buffer.length() && is_char_whitepsace(in_buffer[index])) index++;
+    if(index >= in_buffer.length()) return token.str();
+    if(in_buffer[index] == '"' || in_buffer[index] == '\'') { /* string or character literal */
+        char terminator = in_buffer[index];
+
+        token << in_buffer[index];
+
+        index++;
+        while(index < in_buffer.length() && (in_buffer[index] != terminator || 
+                                            (in_buffer[index-1] == '\\' && in_buffer[index-2] != '\\'))) {  
+            token << in_buffer[index];
+            index++;
+        }
+        if(in_buffer[index] == terminator) {
+            token << in_buffer[index];
+            index++;
+            return token.str();
+        }
+        return std::string();
+    }
+
+    /* if not a string/character literal */
     while(index < in_buffer.length() && !is_char_whitepsace(in_buffer[index])) {
         token << in_buffer[index];
         index++;
