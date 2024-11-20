@@ -1,6 +1,10 @@
 # Project Specific
 bin/
 
+#vscode
+.vscode
+
+
 # Prerequisites
 *.d
 
